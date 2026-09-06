@@ -11,8 +11,11 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
+    "check": "npm run lint && npm run typecheck && npm run audit:prod && npm run build && npm run test:coverage",
+    "test:coverage": "vitest run --coverage",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "check": "npm run lint && npm run typecheck && npm run build && npm run test",
     "prepare": "husky"

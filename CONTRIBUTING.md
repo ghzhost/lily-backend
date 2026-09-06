@@ -10,20 +10,23 @@ Thanks for considering a contribution to Lily Protocol.
 
 ## Quality checks
 
-Before opening a pull request, run the full local CI check:
+Before opening a pull request, run the full verification gate:
 
 ```bash
 npm run check
 ```
 
-This runs `lint`, `typecheck`, `build`, and `test` in the same order as CI. Alternatively, run individual steps:
+Or run the individual stages:
 
 ```bash
 npm run lint
 npm run typecheck
+npm run audit:prod
 npm run build
 npm run test
 ```
+
+`npm run check` mirrors the GitHub Actions CI workflow (lint, typecheck, audit, build, test with coverage) and exits non-zero if any stage fails, so a passing `npm run check` is a strong signal the CI run will pass.
 
 ## Contribution guidelines
 

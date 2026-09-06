@@ -45,3 +45,11 @@ export const agentStatusSchema = z.object({
 });
 
 export type AgentStatusSchema = z.output<typeof agentStatusSchema>;
+
+export const listAgentsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export type ListAgentsQuery = z.output<typeof listAgentsQuerySchema>;
+

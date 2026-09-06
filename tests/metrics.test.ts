@@ -19,9 +19,12 @@ describe("metrics endpoints", () => {
         heapUsedBytes: expect.any(Number),
         externalBytes: expect.any(Number),
       },
+      eventLoopLagMs: expect.any(Number),
       nodeVersion: expect.stringMatching(/^v\d+/),
       environment: expect.any(String),
       timestamp: expect.any(String),
     });
+    expect(response.body.data.eventLoopLagMs).toBeGreaterThanOrEqual(0);
+    expect(Number.isFinite(response.body.data.eventLoopLagMs)).toBe(true);
   });
 });
