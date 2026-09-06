@@ -18,7 +18,7 @@ describe("Lily Backend Stress & Hardening Test Suite", () => {
         agentsService.createAgent({
           name: `Agent Batch ${i}`,
           description: `Orchestrating treasury batch flow for index ${i}`,
-          capabilities: ["settlement", "monitoring"]
+          capabilities: ["settlement", "monitoring"],
         });
       }
 
@@ -37,40 +37,54 @@ describe("Lily Backend Stress & Hardening Test Suite", () => {
 
   describe("Error Middleware Resilience", () => {
     it("handles non-Error objects gracefully without throwing", () => {
-      const mockReq: any = { method: "POST", originalUrl: "/api/v1/test" };
       let statusCode = 0;
-      let jsonPayload: any = null;
+      let jsonPayload: unknown = null;
 
-      const mockRes: any = {
+      const mockReq = {
+        method: "POST",
+        originalUrl: "/api/v1/test",
+      } as unknown as Parameters<typeof errorHandler>[1];
+      const mockRes = {
         status(code: number) {
           statusCode = code;
           return this;
         },
-        json(data: any) {
+        json(data: unknown) {
           jsonPayload = data;
           return this;
-        }
-      };
+        },
+      } as unknown as Parameters<typeof errorHandler>[2];
+      const mockNext = (() => {}) as unknown as Parameters<
+        typeof errorHandler
+      >[3];
 
       // Test string exception
-      errorHandler("Custom string error" as any, mockReq, mockRes, (() => {}) as any);
+      errorHandler("Custom string error", mockReq, mockRes, mockNext);
       expect(statusCode).toBe(500);
-      expect(jsonPayload.success).toBe(false);
-      expect(jsonPayload.message).toBe("Custom string error");
+      expect(jsonPayload as { success: boolean }).toMatchObject({
+        success: false,
+        message: "Custom string error",
+      });
 
       // Test raw object exception
-      errorHandler({ foo: "bar" } as any, mockReq, mockRes, (() => {}) as any);
+      errorHandler({ foo: "bar" }, mockReq, mockRes, mockNext);
       expect(statusCode).toBe(500);
-      expect(jsonPayload.success).toBe(false);
-      expect(jsonPayload.message).toBe("An unexpected error occurred");
+      expect(jsonPayload as { success: boolean }).toMatchObject({
+        success: false,
+        message: "An unexpected error occurred",
+      });
 
       // Test AppError
-      const appErr = new AppError(422, "Unprocessable Entity", { field: "name" });
-      errorHandler(appErr, mockReq, mockRes, (() => {}) as any);
+      const appErr = new AppError(422, "Unprocessable Entity", {
+        field: "name",
+      });
+      errorHandler(appErr, mockReq, mockRes, mockNext);
       expect(statusCode).toBe(422);
-      expect(jsonPayload.success).toBe(false);
-      expect(jsonPayload.message).toBe("Unprocessable Entity");
-      expect(jsonPayload.details).toEqual({ field: "name" });
+      expect(jsonPayload as { success: boolean }).toMatchObject({
+        success: false,
+        message: "Unprocessable Entity",
+        details: { field: "name" },
+      });
     });
   });
 });

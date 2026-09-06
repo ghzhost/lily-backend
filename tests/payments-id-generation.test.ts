@@ -1,48 +1,69 @@
 import { describe, expect, it } from "vitest";
-import { paymentsService } from "../src/modules/payments/payments.service";
 
-describe("Quote and Payment ID Generation (Issue #290)", () => {
-  it("generates collision-resistant quote ids with quote_ prefix and UUID format", () => {
-    paymentsService.reset();
-    const count = 100;
-    const ids = new Set<string>();
+import {
+  generatePaymentId,
+  generateQuoteId,
+  paymentsService,
+} from "../src/modules/payments/payments.service";
 
-    for (let i = 0; i < count; i++) {
-      const { quote } = paymentsService.createQuote({
-        sourceAsset: "USDC",
-        destinationAsset: "XLM",
-        sourceAmount: "100.00",
-      });
-      expect(quote.id).toMatch(/^quote_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-      ids.add(quote.id);
-    }
+describe("Quote and payment ID generation (issue #290)", () => {
+  const UUID_REGEX =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-    expect(ids.size).toBe(count);
+  it("generateQuoteId retains quote_ prefix and follows UUID v4 format", () => {
+    const id = generateQuoteId();
+    expect(id.startsWith("quote_")).toBe(true);
+
+    const uuidPart = id.slice("quote_".length);
+    expect(uuidPart).toMatch(UUID_REGEX);
   });
 
-  it("generates collision-resistant payment ids with pay_ prefix and UUID format", () => {
-    paymentsService.reset();
+  it("generatePaymentId retains pay_ prefix and follows UUID v4 format", () => {
+    const id = generatePaymentId();
+    expect(id.startsWith("pay_")).toBe(true);
 
-    const count = 50;
-    const ids = new Set<string>();
+    const uuidPart = id.slice("pay_".length);
+    expect(uuidPart).toMatch(UUID_REGEX);
+  });
+
+  it("consecutive rapid ID generations produce strictly unique IDs", () => {
+    const quoteIds = new Set<string>();
+    const paymentIds = new Set<string>();
+    const count = 1000;
 
     for (let i = 0; i < count; i++) {
-      // Re-create active quote for each execution
-      const q = paymentsService.createQuote({
-        sourceAsset: "USDC",
-        destinationAsset: "XLM",
-        sourceAmount: "10.00",
-      }).quote;
-
-      const { payment } = paymentsService.executePayment({
-        quoteId: q.id,
-        confirmed: true,
-      });
-
-      expect(payment.id).toMatch(/^pay_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-      ids.add(payment.id);
+      quoteIds.add(generateQuoteId());
+      paymentIds.add(generatePaymentId());
     }
 
-    expect(ids.size).toBe(count);
+    expect(quoteIds.size).toBe(count);
+    expect(paymentIds.size).toBe(count);
+  });
+
+  it("paymentsService.createQuote produces UUID-backed quote ID", () => {
+    const { quote } = paymentsService.createQuote({
+      sourceAsset: "XLM",
+      destinationAsset: "USDC",
+      sourceAmount: "100.00",
+    });
+
+    expect(quote.id.startsWith("quote_")).toBe(true);
+    expect(quote.id.slice("quote_".length)).toMatch(UUID_REGEX);
+  });
+
+  it("paymentsService.executePayment produces UUID-backed payment ID", () => {
+    const { quote } = paymentsService.createQuote({
+      sourceAsset: "XLM",
+      destinationAsset: "USDC",
+      sourceAmount: "50.00",
+    });
+
+    const { payment } = paymentsService.executePayment({
+      quoteId: quote.id,
+      confirmed: true,
+    });
+
+    expect(payment.id.startsWith("pay_")).toBe(true);
+    expect(payment.id.slice("pay_".length)).toMatch(UUID_REGEX);
   });
 });
