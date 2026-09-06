@@ -16,37 +16,55 @@ export const normalizeAmount = (val: string): string => {
   return intPart + decPart;
 };
 
+const decimalAmountRegex = /^\d+(\.\d{1,7})?$/;
+
 const amountString = z
   .string()
   .trim()
   .min(1)
+  .regex(/^\d+(\.\d+)?$/, {
+    message: "Amount must be a non-negative decimal number",
+  })
   .transform((value) => normalizeAmount(value));
 
 /**
- * Stellar asset codes are 1-12 alphanumeric characters. "XLM" represents the
- * native asset and is allowed as a special case of the same charset.
+ * Stellar asset codes are 3-12 uppercase letters. "XLM" represents the
+ * native asset. Lowercase and numeric-only codes are rejected.
  */
 export const stellarAssetCodeSchema = z
   .string()
   .trim()
-  .min(1)
-  .max(12)
-  .regex(/^[A-Za-z0-9]+$/, {
-    message: "Asset code must be 1-12 alphanumeric characters (e.g. USDC, XLM)",
+  .regex(/^[A-Z]{3,12}$/, {
+    message: "Asset code must be 3-12 uppercase letters (e.g. USDC, XLM)",
   });
 
-export const quoteSchema = z.object({
-  assetCode: stellarAssetCodeSchema,
-  amount: amountString,
-  destination: z.string().trim().min(1),
-});
+export const currencySchema = z
+  .string()
+  .trim()
+  .regex(/^[A-Z]{3}$/, {
+    message: "Currency must be three uppercase letters (e.g. USD)",
+  });
+
+export const quoteSchema = z
+  .object({
+    assetCode: stellarAssetCodeSchema.optional(),
+    currency: currencySchema.optional(),
+    amount: amountString,
+    destination: z.string().trim().min(1),
+  })
+  .refine(
+    (data) => data.assetCode !== undefined || data.currency !== undefined,
+    {
+      message: "Either assetCode or currency must be provided",
+    },
+  );
 
 export type QuoteInput = z.input<typeof quoteSchema>;
 export type QuoteOutput = z.output<typeof quoteSchema>;
 
 export const createQuoteSchema = z.object({
-  sourceAsset: z.string().trim().min(1),
-  destinationAsset: z.string().trim().min(1),
+  sourceAsset: stellarAssetCodeSchema,
+  destinationAsset: stellarAssetCodeSchema,
   sourceAmount: amountString,
 });
 
