@@ -12,12 +12,12 @@ import {
   methodNotAllowedHandler,
   notFoundHandler,
 } from "./common/http/not-found.middleware";
-import { serializeResponse } from "./common/http/request-logger";
 import { corsOptions } from "./config/cors";
 import { env, securityConfig } from "./config/env";
 import { logger } from "./config/logger";
 import { apiRateLimiter } from "./config/rate-limit";
 import { shouldIgnoreRequestLog } from "./config/request-logging";
+import { serializeResponse } from "./common/http/request-logger";
 import { apiRouter } from "./routes";
 
 const sensitiveQueryKeys = [
@@ -95,7 +95,7 @@ export const createApp = (): express.Express => {
   app.get("/", (_request, response) => {
     response.status(200).json({
       success: true,
-      message: `${env.APP_NAME} is active`,
+      message: `${env.APP_NAME} is running`,
       docs: `${env.API_PREFIX}/health`,
     });
   });

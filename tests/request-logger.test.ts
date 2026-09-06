@@ -7,7 +7,7 @@ import {
   serializeResponse,
 } from "../src/common/http/request-logger";
 
-describe("request and response log sanitization", () => {
+describe("request log sanitization", () => {
   it("redacts sensitive query values while preserving safe query context", () => {
     expect(
       sanitizeRequestUrl(
@@ -43,13 +43,12 @@ describe("request and response log sanitization", () => {
     expect(serializeRequest(request)).not.toHaveProperty("raw");
   });
 
-  it("omits response headers and keeps statusCode in serializeResponse", () => {
+  it("omits headers and raw properties from serialized response", () => {
     const response = {
       statusCode: 200,
       headers: {
-        "content-type": "application/json",
         "content-security-policy": "default-src 'self'",
-        "set-cookie": ["session=123"],
+        "set-cookie": "session=secret",
       },
       raw: {},
     } as unknown as SerializedResponse;
@@ -61,3 +60,4 @@ describe("request and response log sanitization", () => {
     expect(serializeResponse(response)).not.toHaveProperty("raw");
   });
 });
+

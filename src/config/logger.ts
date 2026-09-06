@@ -5,8 +5,15 @@ import { env } from "./env";
 const loggerOptions: LoggerOptions = {
   name: env.APP_NAME,
   level: env.LOG_LEVEL,
-  ...(env.NODE_ENV === "development"
-    ? {
+};
+
+// In development, pretty-print logs through the pino transport. All other
+// environments stream through process.stdout so that stdout-based
+// instrumentation (e.g. the redaction integration test) can observe output.
+export const logger =
+  env.NODE_ENV === "development"
+    ? pino({
+        ...loggerOptions,
         transport: {
           target: "pino-pretty",
           options: {
@@ -14,8 +21,5 @@ const loggerOptions: LoggerOptions = {
             translateTime: "SYS:standard",
           },
         },
-      }
-    : {}),
-};
-
-export const logger = pino(loggerOptions);
+      })
+    : pino(loggerOptions, process.stdout);

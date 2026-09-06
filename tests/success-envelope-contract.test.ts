@@ -21,7 +21,10 @@ describe("Success envelope contract (issue #130)", () => {
 
   for (const endpoint of successEndpoints) {
     it(`${endpoint.method.toUpperCase()} ${endpoint.path} returns { success: true, data }`, async () => {
-      const req = request(app)[endpoint.method](endpoint.path);
+      const req =
+        endpoint.method === "post"
+          ? request(app).post(endpoint.path)
+          : request(app).get(endpoint.path);
       if (endpoint.body) {
         req.send(endpoint.body);
       }
