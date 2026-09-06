@@ -46,26 +46,10 @@ export const agentStatusSchema = z.object({
 
 export type AgentStatusSchema = z.output<typeof agentStatusSchema>;
 
-/**
- * Path parameter schema for agent id.
- * Agents are provisioned with an "agentlily_" prefix followed by alphanumeric/underscore chars.
- */
-export const agentIdParamsSchema = z.object({
-  id: z
-    .string()
-    .regex(/^agentlily_[A-Za-z0-9_]+$/, {
-      message: 'Agent id must start with "agentlily_" followed by alphanumeric or underscore characters',
-    }),
+export const listAgentsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
 });
 
-/**
- * Path parameter schema for quote id.
- * Quotes are generated with a "quote_" prefix.
- */
-export const quoteIdParamsSchema = z.object({
-  id: z
-    .string()
-    .regex(/^quote_[A-Za-z0-9_]+$/, {
-      message: 'Quote id must start with "quote_" followed by alphanumeric or underscore characters',
-    }),
-});
+export type ListAgentsQuery = z.output<typeof listAgentsQuerySchema>;
+
