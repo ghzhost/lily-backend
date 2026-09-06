@@ -1,8 +1,12 @@
 import { describe, it, expect } from "vitest";
 import express from "express";
+import type { Request } from "express";
 import request from "supertest";
 import { z } from "zod";
-import { validateParams, validateQuery } from "../src/common/http/validate.middleware";
+import {
+  validateParams,
+  validateQuery,
+} from "../src/common/http/validate.middleware";
 import { errorHandler } from "../src/common/http/error.middleware";
 
 describe("validateParams and validateQuery helpers (issue #86)", () => {
@@ -19,9 +23,17 @@ describe("validateParams and validateQuery helpers (issue #86)", () => {
 
     app.get(
       "/search",
-      validateQuery(z.object({ q: z.string().min(1), limit: z.coerce.number().int().positive().optional() })),
+      validateQuery(
+        z.object({
+          q: z.string().min(1),
+          limit: z.coerce.number().int().positive().optional(),
+        }),
+      ),
       (req, res) => {
-        const vq = (req as Request & { validatedQuery?: { q: string; limit?: number } }).validatedQuery!; res.json({ success: true, data: { q: vq.q, limit: vq.limit } });
+        const vq = (
+          req as Request & { validatedQuery?: { q: string; limit?: number } }
+        ).validatedQuery!;
+        res.json({ success: true, data: { q: vq.q, limit: vq.limit } });
       },
     );
 

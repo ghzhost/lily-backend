@@ -84,43 +84,24 @@ describe("Idempotency-Key middleware", () => {
     expect(second.body.data.agent.id).not.toBe(first.body.data.agent.id);
   });
 
-  it("does not cache error responses and allows retry with corrected payload", async () => {
+  it("does not cache error responses", async () => {
     const badPayload = {
       name: "x",
       description: "too short",
       capabilities: [],
     };
 
-    const goodPayload = {
-      name: "Fixed Agent",
-      description: "A properly formed agent description",
-      capabilities: ["testing"],
-    };
-
-    // First attempt fails with 400 validation error
     await request(app)
       .post("/api/v1/agents")
-      .set("Idempotency-Key", "key-err-retry")
+      .set("Idempotency-Key", "key-err")
       .send(badPayload)
       .expect(400);
 
-    // Second attempt with corrected payload using same key should succeed (201) and not return stale 400
-    const res = await request(app)
+    await request(app)
       .post("/api/v1/agents")
-      .set("Idempotency-Key", "key-err-retry")
-      .send(goodPayload)
-      .expect(201);
-
-    expect(res.body.data.agent.name).toBe("Fixed Agent");
-
-    // Third attempt with same key should replay the cached 201 response
-    const replay = await request(app)
-      .post("/api/v1/agents")
-      .set("Idempotency-Key", "key-err-retry")
-      .send(goodPayload)
-      .expect(201);
-
-    expect(replay.body).toEqual(res.body);
+      .set("Idempotency-Key", "key-err")
+      .send(badPayload)
+      .expect(400);
   });
 
   it("ignores idempotency on GET requests (no caching)", async () => {
@@ -133,5 +114,113 @@ describe("Idempotency-Key middleware", () => {
       .get("/api/v1/agents")
       .set("Idempotency-Key", "key-get")
       .expect(200);
+  });
+
+  it("does not cache 4xx error responses and allows retry with corrected payload (issue #284)", async () => {
+    const key = "key-err-retry-001";
+    const badPayload = {
+      name: "x",
+      description: "too short",
+      capabilities: [],
+    };
+    const validPayload = {
+      name: "Valid Agent",
+      description: "A valid agent description for retry test",
+      capabilities: ["testing"],
+    };
+
+    // First attempt fails schema validation with 400
+    const errRes = await request(app)
+      .post("/api/v1/agents")
+      .set("Idempotency-Key", key)
+      .send(badPayload)
+      .expect(400);
+
+    expect(errRes.body.success).toBe(false);
+
+    // Second attempt with SAME key and valid payload succeeds with 201
+    const successRes = await request(app)
+      .post("/api/v1/agents")
+      .set("Idempotency-Key", key)
+      .send(validPayload)
+      .expect(201);
+
+    expect(successRes.body.success).toBe(true);
+    expect(successRes.body.data.agent.name).toBe("Valid Agent");
+
+    // Third attempt with SAME key replays cached 201 response
+    const replayRes = await request(app)
+      .post("/api/v1/agents")
+      .set("Idempotency-Key", key)
+      .send(validPayload)
+      .expect(201);
+
+    expect(replayRes.body).toEqual(successRes.body);
+    expect(replayRes.body.data.agent.id).toBe(successRes.body.data.agent.id);
+
+    // Verify only 1 agent was created (plus 1 seed agent = 2 total)
+    const listRes = await request(app).get("/api/v1/agents").expect(200);
+    expect(listRes.body.data.total).toBe(2);
+  });
+
+  it("bounds the store capacity and evicts oldest entries first (issue #288)", async () => {
+    const { _setIdempotencyConfig, _getIdempotencyStoreSize } = await import(
+      "../src/common/http/idempotency.middleware"
+    );
+    _setIdempotencyConfig({ maxEntries: 2 });
+
+    const p1 = {
+      name: "Agent One",
+      description: "A valid description for agent one",
+      capabilities: ["testing"],
+    };
+    const p2 = {
+      name: "Agent Two",
+      description: "A valid description for agent two",
+      capabilities: ["testing"],
+    };
+    const p3 = {
+      name: "Agent Three",
+      description: "A valid description for agent three",
+      capabilities: ["testing"],
+    };
+
+    // Insert key-1 and key-2
+    const res1 = await request(app).post("/api/v1/agents").set("Idempotency-Key", "k1").send(p1).expect(201);
+    const res2 = await request(app).post("/api/v1/agents").set("Idempotency-Key", "k2").send(p2).expect(201);
+    expect(_getIdempotencyStoreSize()).toBe(2);
+
+    // Insert key-3 -> capacity reached, evicts oldest (k1)
+    await request(app).post("/api/v1/agents").set("Idempotency-Key", "k3").send(p3).expect(201);
+    expect(_getIdempotencyStoreSize()).toBe(2);
+
+    // Replay k2 -> still cached
+    const replay2 = await request(app).post("/api/v1/agents").set("Idempotency-Key", "k2").send(p2).expect(201);
+    expect(replay2.body.data.agent.id).toBe(res2.body.data.agent.id);
+
+    // Replay k1 -> evicted, creates a NEW agent
+    const replay1 = await request(app).post("/api/v1/agents").set("Idempotency-Key", "k1").send(p1).expect(201);
+    expect(replay1.body.data.agent.id).not.toBe(res1.body.data.agent.id);
+  });
+
+  it("proactively sweeps expired entries even without replays (issue #288)", async () => {
+    const { _setIdempotencyConfig, _getIdempotencyStoreSize, _sweepIdempotencyStore } = await import(
+      "../src/common/http/idempotency.middleware"
+    );
+    _setIdempotencyConfig({ ttlMs: 40 });
+
+    const p = {
+      name: "Sweep Agent",
+      description: "A valid description for sweep agent",
+      capabilities: ["testing"],
+    };
+    await request(app).post("/api/v1/agents").set("Idempotency-Key", "k-sweep").send(p).expect(201);
+    expect(_getIdempotencyStoreSize()).toBe(1);
+
+    await new Promise((r) => setTimeout(r, 60));
+
+    const evictedCount = _sweepIdempotencyStore();
+    expect(evictedCount).toBe(1);
+    expect(_getIdempotencyStoreSize()).toBe(0);
   });
 });
