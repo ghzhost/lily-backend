@@ -66,7 +66,7 @@ export const attachMethodNotAllowedHandlers = (router: Router): void => {
             next(
               new AppError(
                 405,
-                `Method ${req.method} not allowed for ${req.originalUrl}`,
+                `Method ${req.method} not allowed for ${req.path}`,
               ),
             );
           } else {
@@ -112,7 +112,7 @@ export const methodNotAllowedHandler = (router: Router) => {
       next(
         new AppError(
           405,
-          `Method ${method} not allowed for ${request.originalUrl}`,
+          `Method ${method} not allowed for ${request.path}`,
         ),
       );
       return;
@@ -127,10 +127,11 @@ export const notFoundHandler = (
   _response: Response,
   next: NextFunction,
 ): void => {
+  const pathOnly = request.originalUrl.split("?")[0] ?? request.originalUrl;
   next(
     new AppError(
       404,
-      `Route not found: ${request.method} ${request.originalUrl}`,
+      `Route not found: ${request.method} ${pathOnly}`,
       undefined,
       "NOT_FOUND",
     ),
