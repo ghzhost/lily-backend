@@ -20,9 +20,15 @@ agentsRouter.get("/", listAgents);
 agentsRouter.get("/:id", getAgentById);
 agentsRouter.post(
   "/",
+  apiKeyAuth,
   idempotencyKeyMiddleware,
   validateBody(createAgentSchema),
   createAgent,
 );
-agentsRouter.patch("/:id", validateBody(agentStatusSchema), updateAgentStatus);
-agentsRouter.delete("/:id", deleteAgent);
+agentsRouter.patch(
+  "/:id",
+  apiKeyAuth,
+  validateBody(agentStatusSchema),
+  updateAgentStatus,
+);
+agentsRouter.delete("/:id", apiKeyAuth, deleteAgent);

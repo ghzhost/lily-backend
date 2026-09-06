@@ -24,7 +24,12 @@ export const getAgentById = (
   const agent = agentsService.getAgentById(request.params.id);
 
   if (!agent) {
-    throw new AppError(404, `Agent not found: ${request.params.id}`);
+    throw new AppError(
+      404,
+      `Agent not found: ${request.params.id}`,
+      undefined,
+      "NOT_FOUND",
+    );
   }
 
   response.status(200).json({
@@ -67,7 +72,12 @@ export const deleteAgent = (
   response: Response,
 ): void => {
   if (!agentsService.deleteAgent(request.params.id)) {
-    throw new AppError(404, `Agent not found: ${request.params.id}`);
+    throw new AppError(
+      404,
+      `Agent not found: ${request.params.id}`,
+      undefined,
+      "NOT_FOUND",
+    );
   }
 
   response.status(204).end();

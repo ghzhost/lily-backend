@@ -127,7 +127,7 @@ export const notFoundHandler = (
   _response: Response,
   next: NextFunction,
 ): void => {
-  const pathOnly = (request.originalUrl ?? request.url ?? "").split("?", 1)[0] || request.path;
+  const pathOnly = request.originalUrl.split("?")[0] ?? request.originalUrl;
   next(
     new AppError(
       404,

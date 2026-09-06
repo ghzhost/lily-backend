@@ -12,18 +12,45 @@ import {
   methodNotAllowedHandler,
   notFoundHandler,
 } from "./common/http/not-found.middleware";
-import { sanitizeRequestUrl } from "./common/http/request-logger";
 import { corsOptions } from "./config/cors";
 import { env, securityConfig } from "./config/env";
 import { logger } from "./config/logger";
 import { apiRateLimiter } from "./config/rate-limit";
 import { shouldIgnoreRequestLog } from "./config/request-logging";
+import { serializeResponse } from "./common/http/request-logger";
 import { apiRouter } from "./routes";
+
+const sensitiveQueryKeys = [
+  "api_key",
+  "apikey",
+  "key",
+  "token",
+  "secret",
+  "seed",
+  "wallet_seed",
+  "private_key",
+];
+
+const redactUrl = (url: string): string => {
+  try {
+    const parsed = new URL(url, "http://localhost");
+    let changed = false;
+    for (const key of sensitiveQueryKeys) {
+      if (parsed.searchParams.has(key)) {
+        parsed.searchParams.set(key, "[REDACTED]");
+        changed = true;
+      }
+    }
+    return changed ? `${parsed.pathname}${parsed.search}` : url;
+  } catch {
+    return url;
+  }
+};
 
 const serializeRequestLog = (request: IncomingMessage & { id?: unknown }) => ({
   id: request.id,
   method: request.method,
-  url: sanitizeRequestUrl(request.url ?? ""),
+  url: redactUrl(request.url ?? ""),
   remoteAddress: request.socket?.remoteAddress,
   remotePort: request.socket?.remotePort,
 });
@@ -60,6 +87,7 @@ export const createApp = (): express.Express => {
       },
       serializers: {
         req: serializeRequestLog as never,
+        res: serializeResponse as never,
       },
     }),
   );

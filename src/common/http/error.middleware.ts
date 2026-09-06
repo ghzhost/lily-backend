@@ -54,7 +54,14 @@ const getMessage = (error: unknown): string => {
     return "Request body too large";
   }
 
-  return error.message;
+  let message = error.message;
+  if (error instanceof AppError && error.statusCode === 404) {
+    message = message.split("?")[0] ?? message;
+  } else if (message.includes("?")) {
+    message = sanitizeRequestUrl(message);
+  }
+
+  return message;
 };
 
 export const errorHandler = (
@@ -75,15 +82,22 @@ export const errorHandler = (
     {
       err: error,
       method: request.method,
-      path: sanitizeRequestUrl(request.originalUrl ?? request.url ?? ""),
+      path: sanitizeRequestUrl(request.originalUrl),
       statusCode,
     },
     "Request failed",
   );
 
+  const code =
+    isAppError && error.code
+      ? error.code
+      : statusCode === 500
+        ? "INTERNAL_SERVER_ERROR"
+        : undefined;
+
   response.status(statusCode).json({
     success: false,
-    ...(isAppError && error.code ? { code: error.code } : {}),
+    ...(code ? { code } : {}),
     message:
       statusCode === 500 && !isAppError && env.NODE_ENV === "production"
         ? "Internal server error"

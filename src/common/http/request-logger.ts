@@ -1,6 +1,7 @@
-import type { SerializedRequest } from "pino-std-serializers";
+import type { ServerResponse } from "node:http";
+import type { SerializedRequest, SerializedResponse } from "pino-std-serializers";
 
-const REDACTED = "[REDACTED]";
+const REDACTED = "[Redacted]";
 
 const sensitiveQueryKeys = new Set([
   "access_token",
@@ -16,7 +17,6 @@ const sensitiveQueryKeys = new Set([
   "private_key",
   "refresh_token",
   "secret",
-  "seed",
   "session",
   "signature",
   "sig",
@@ -26,14 +26,10 @@ const sensitiveQueryKeys = new Set([
 
 const normalizeQueryKey = (key: string) => key.toLowerCase().replace(/-/g, "_");
 
-export const sanitizeRequestUrl = (requestUrl: string): string => {
-  if (!requestUrl) {
-    return "";
-  }
+export const sanitizeRequestUrl = (requestUrl: string) => {
+  const [pathname, query = ""] = requestUrl.split("?", 2);
 
-  const [pathname, query] = requestUrl.split("?", 2);
-
-  if (query === undefined || query === "") {
+  if (!query) {
     return pathname;
   }
 
@@ -47,8 +43,7 @@ export const sanitizeRequestUrl = (requestUrl: string): string => {
     );
   }
 
-  const serializedQuery = sanitizedParams.toString();
-  return serializedQuery ? `${pathname}?${serializedQuery}` : pathname;
+  return `${pathname}?${sanitizedParams.toString()}`;
 };
 
 export const serializeRequest = (request: SerializedRequest) => ({
@@ -58,3 +53,10 @@ export const serializeRequest = (request: SerializedRequest) => ({
   remoteAddress: request.remoteAddress,
   remotePort: request.remotePort,
 });
+
+export const serializeResponse = (
+  response: SerializedResponse | ServerResponse | { statusCode?: number },
+) => ({
+  statusCode: response.statusCode,
+});
+

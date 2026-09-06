@@ -51,4 +51,27 @@ describe("Wallet address generation uniqueness and normalization (issue #128)", 
     const agent = await createAgent("AB");
     expect(agent.walletAddress).toBe("GAB" + "0".repeat(53));
   });
+
+  it("should reject creation with 409 when normalized slug collides with existing agent", async () => {
+    await createAgent("AB");
+    const res = await request(app)
+      .post("/api/v1/agents")
+      .send({
+        name: "A.B",
+        description: "Colliding agent name with different punctuation",
+        capabilities: ["test"],
+      });
+    expect(res.status).toBe(409);
+    expect(res.body.success).toBe(false);
+    expect(res.body.message).toBe(
+      "Agent with this wallet address already exists",
+    );
+  });
+
+  it("should not mint an all-zero suffix wallet address when name contains only punctuation", async () => {
+    const agent = await createAgent("$$$");
+    expect(agent.walletAddress).toHaveLength(56);
+    expect(agent.walletAddress).toMatch(/^G[A-Z0-9]{55}$/);
+    expect(agent.walletAddress).not.toBe("G" + "0".repeat(55));
+  });
 });
