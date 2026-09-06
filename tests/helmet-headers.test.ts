@@ -12,9 +12,10 @@ describe("Helmet security headers (issue #135)", () => {
 
   it("should set Content-Security-Policy header", async () => {
     const res = await request(app).get("/api/v1/health");
-    expect(res.headers["content-security-policy"]).toBeDefined();
-    expect(typeof res.headers["content-security-policy"]).toBe("string");
-    expect(res.headers["content-security-policy"].length).toBeGreaterThan(0);
+    const csp = res.headers["content-security-policy"];
+    expect(csp).toBeDefined();
+    expect(typeof csp).toBe("string");
+    expect((csp as string).length).toBeGreaterThan(0);
   });
 
   it("should set X-Frame-Options header", async () => {
