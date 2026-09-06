@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 import { env } from "./env";
 
-// 源码和编译产物的配置目录均位于项目根目录下两层，避免依赖启动目录。
+// Both source and build output config directories are located two levels below the project root, avoiding dependency on the working directory.
 const { version } = JSON.parse(
   readFileSync(resolve(__dirname, "../../package.json"), "utf8"),
 ) as { version: string };

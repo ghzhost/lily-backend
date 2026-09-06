@@ -55,3 +55,16 @@ export const executePayment = asyncHandler(
     response.status(200).json({ success: true, data: result });
   },
 );
+
+export const listPayments = asyncHandler(
+  async (
+    _request: Request,
+    response: Response<
+      ApiSuccessResponse<ReturnType<typeof paymentsService.listPayments>>
+    >,
+  ) => {
+    const result = paymentsService.listPayments();
+
+    response.status(200).json({ success: true, data: result });
+  },
+);
