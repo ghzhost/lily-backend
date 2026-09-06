@@ -22,29 +22,32 @@ export const trustProxySchema = z.preprocess(
   ]),
 );
 
-const RESERVED_AUTH_HEADERS = new Set([
+// RFC 9110 field names use the `token` character set. Rejecting operational
+// headers as API-key carriers also prevents the auth middleware from
+// reinterpreting headers that Express or another middleware already owns.
+const HTTP_FIELD_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+const RESERVED_API_KEY_HEADERS = new Set([
   "authorization",
-  "cookie",
-  "set-cookie",
-  "host",
   "connection",
   "content-length",
   "content-type",
+  "cookie",
+  "host",
+  "idempotency-key",
+  "proxy-authorization",
+  "set-cookie",
+  "transfer-encoding",
+  "x-request-id",
 ]);
-
-const HTTP_HEADER_NAME_REGEX = /^[a-zA-Z0-9!#$%&'*+\-.^_`|~]+$/;
 
 export const authApiKeyHeaderSchema = z
   .string()
-  .min(1, "AUTH_API_KEY_HEADER must not be empty")
-  .refine((val) => val.trim() === val && !/\s/.test(val), {
-    message: "AUTH_API_KEY_HEADER must not contain whitespace",
+  .min(1)
+  .regex(HTTP_FIELD_NAME_PATTERN, {
+    message: "AUTH_API_KEY_HEADER must be a valid HTTP header field name",
   })
-  .refine((val) => HTTP_HEADER_NAME_REGEX.test(val), {
-    message: "AUTH_API_KEY_HEADER must be a valid HTTP header token name",
-  })
-  .refine((val) => !RESERVED_AUTH_HEADERS.has(val.toLowerCase()), {
-    message: "AUTH_API_KEY_HEADER conflicts with reserved HTTP header",
+  .refine((header) => !RESERVED_API_KEY_HEADERS.has(header.toLowerCase()), {
+    message: "AUTH_API_KEY_HEADER conflicts with a reserved HTTP header",
   })
   .default("x-api-key");
 
