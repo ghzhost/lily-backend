@@ -24,10 +24,8 @@ COPY --chown=node:node .env.example ./.env.example
 
 EXPOSE 4000
 
-# Health probe uses Node's built-in fetch (alpine has no curl/wget).
-# PORT env falls back to 4000, matching the EXPOSE above.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "const p=process.env.PORT||4000;fetch('http://127.0.0.1:'+p+'/api/v1/health/live').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 4000) + '/api/v1/health/live').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
 USER node
 

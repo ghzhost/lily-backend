@@ -12,18 +12,23 @@ describe("Readiness and liveness endpoints (issue #120)", () => {
     expect(res.body.data.status).toBe("ok");
   });
 
-  it("GET /api/v1/health/live should return liveness ok", async () => {
+  it("GET /api/v1/health/live should return liveness details", async () => {
     const res = await request(app).get("/api/v1/health/live");
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.status).toBe("ok");
+    expect(res.body.data.service).toEqual(expect.any(String));
+    expect(new Date(res.body.data.timestamp).toISOString()).toBe(
+      res.body.data.timestamp,
+    );
   });
 
-  it("GET /api/v1/health/ready should return readiness with full status", async () => {
+  it("GET /api/v1/health/ready should return dependency readiness", async () => {
     const res = await request(app).get("/api/v1/health/ready");
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.status).toBe("ok");
+    expect(res.body.data.checks).toEqual({ dependencies: "ok" });
     expect(res.body.data).toHaveProperty("timestamp");
   });
 
