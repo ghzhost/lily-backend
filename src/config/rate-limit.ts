@@ -8,31 +8,66 @@ interface RateLimitLocals {
 }
 
 /**
- * Checks if a request path is an operational endpoint (health, metrics, root)
- * that should be exempted from rate limiting to prevent orchestrator probes
- * and metrics scrapers from consuming client rate-limit budget or causing 429s.
+ * Normalizes and determines whether a given path is an operational endpoint
+ * (root, health probes, or metrics) that should not consume the public rate limit.
  */
 export const isOperationalPath = (
-  req: Request,
-  prefix: string = env.API_PREFIX,
+  pathname: string,
+  apiPrefix: string = env.API_PREFIX,
 ): boolean => {
-  const urlString = req.originalUrl || req.url || "/";
-  const pathname = new URL(urlString, "http://localhost").pathname;
-  const normalizedPrefix = prefix.endsWith("/") ? prefix.slice(0, -1) : prefix;
-  const healthPath = `${normalizedPrefix}/health`;
-  const metricsPath = `${normalizedPrefix}/metrics`;
+  const normalized = pathname.split("?")[0] ?? "";
+  const healthPrefix = `${apiPrefix}/health`;
+  const metricsPrefix = `${apiPrefix}/metrics`;
 
   return (
-    pathname === "/" ||
-    pathname === healthPath ||
-    pathname.startsWith(`${healthPath}/`) ||
-    pathname === metricsPath ||
-    pathname.startsWith(`${metricsPath}/`) ||
-    req.path === "/health" ||
-    req.path?.startsWith("/health/") ||
-    req.path === "/metrics" ||
-    req.path?.startsWith("/metrics/")
+    normalized === "/" ||
+    normalized === healthPrefix ||
+    normalized.startsWith(`${healthPrefix}/`) ||
+    normalized === metricsPrefix ||
+    normalized.startsWith(`${metricsPrefix}/`) ||
+    normalized === "/health" ||
+    normalized.startsWith("/health/") ||
+    normalized === "/metrics" ||
+    normalized.startsWith("/metrics/")
   );
+};
+
+/**
+ * Predicate evaluating whether an incoming request should skip the API rate limiter.
+ */
+export const shouldSkipApiRateLimit = (
+  request: Request,
+  apiPrefix: string = env.API_PREFIX,
+): boolean => {
+  const isTest = process.env.NODE_ENV === "test";
+  const forceRateLimit =
+    process.env.ENABLE_RATE_LIMIT_TESTS === "true" ||
+    request.headers?.["x-test-rate-limit"] === "true";
+
+  if (isTest && !forceRateLimit) {
+    return true;
+  }
+
+  if (request.path && isOperationalPath(request.path, apiPrefix)) {
+    return true;
+  }
+
+  if (request.originalUrl) {
+    const originalPathname = new URL(request.originalUrl, "http://localhost")
+      .pathname;
+    if (isOperationalPath(originalPathname, apiPrefix)) {
+      return true;
+    }
+  }
+
+  if (request.url) {
+    const urlPathname = new URL(request.url, "http://localhost").pathname;
+    if (isOperationalPath(urlPathname, apiPrefix)) {
+      return true;
+    }
+  }
+
+  return false;
 };
 
 /**
@@ -63,14 +98,25 @@ export const rateLimitHandler = (
   });
 };
 
-export const apiRateLimiter = rateLimit({
-  windowMs: securityConfig.rateLimitWindowMs,
-  limit: securityConfig.rateLimitMaxRequests,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => process.env.NODE_ENV === "test" || isOperationalPath(req),
-  handler: rateLimitHandler,
-});
+export interface CreateRateLimiterOptions {
+  apiPrefix?: string;
+  limit?: number;
+  windowMs?: number;
+}
+
+export const createApiRateLimiter = (options?: CreateRateLimiterOptions) => {
+  return rateLimit({
+    windowMs: options?.windowMs ?? securityConfig.rateLimitWindowMs,
+    limit: options?.limit ?? securityConfig.rateLimitMaxRequests,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (request: Request) =>
+      shouldSkipApiRateLimit(request, options?.apiPrefix ?? env.API_PREFIX),
+    handler: rateLimitHandler,
+  });
+};
+
+export const apiRateLimiter = createApiRateLimiter();
 
 export const writeRateLimiter = rateLimit({
   windowMs: 60_000,
