@@ -1,25 +1,47 @@
 import type { Express } from "express";
 import request from "supertest";
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { createIsolatedTestApp } from "./helpers/create-test-app";
+import { createApp } from "@/app";
+import { agentsService } from "@/modules/agents/agents.service";
+import { capabilityEnum } from "@/modules/agents/agents.schema";
+
+const app: Express = createApp();
 
 describe("agent endpoints", () => {
-  let app: Express;
-
-  beforeEach(async () => {
-    app = await createIsolatedTestApp();
-  });
-
   it("exposes reset that restores the seeded agents for test isolation", async () => {
-    const { agentsService } =
-      await import("../src/modules/agents/agents.service");
-
     agentsService.reset();
     const response = await request(app).get("/api/v1/agents");
 
     expect(response.status).toBe(200);
     expect(response.body.data.total).toBe(1);
+  });
+
+  it("returns only allowlisted capabilities for seeded and created agents", async () => {
+    agentsService.reset();
+    const allowlist = capabilityEnum.options;
+
+    // Create an agent with valid capabilities
+    await request(app)
+      .post("/api/v1/agents")
+      .send({
+        name: "Payments Agent",
+        description:
+          "AgentLily responsible for processing USDC payments and settlements.",
+        capabilities: ["usdc-payments", "settlement"],
+      });
+
+    const response = await request(app).get("/api/v1/agents");
+    expect(response.status).toBe(200);
+
+    for (const agent of response.body.data.agents) {
+      for (const cap of agent.capabilities as string[]) {
+        expect(allowlist).toContain(cap);
+      }
+    }
+
+    // Reset to restore clean state for subsequent tests
+    agentsService.reset();
   });
 
   it("returns seeded agents so contributors can inspect a real module", async () => {
@@ -183,6 +205,69 @@ describe("agent endpoints", () => {
     expect(response.body.data.agents[0]).toMatchObject({
       id: "agentlily_demo_001",
       status: "paused",
+    });
+  });
+
+  describe("pagination (issue #265)", () => {
+    it("returns at most the requested limit of agents with total reflecting the full store size", async () => {
+      agentsService.reset();
+      // Create additional agents so we have at least 3
+      await request(app)
+        .post("/api/v1/agents")
+        .send({
+          name: "Agent Two",
+          description:
+            "Second test agent for testing limit and offset pagination.",
+          capabilities: ["settlement"],
+        });
+      await request(app)
+        .post("/api/v1/agents")
+        .send({
+          name: "Agent Three",
+          description:
+            "Third test agent for testing limit and offset pagination.",
+          capabilities: ["settlement"],
+        });
+
+      const response = await request(app).get("/api/v1/agents?limit=2&offset=0");
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.agents).toHaveLength(2);
+      expect(response.body.data.total).toBe(3);
+    });
+
+    it("returns an empty agents array with correct total when offset is beyond store size", async () => {
+      const response = await request(app).get("/api/v1/agents?limit=10&offset=50");
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.agents).toHaveLength(0);
+      expect(response.body.data.total).toBeGreaterThan(0);
+    });
+
+    it("rejects limit above 100 with 400 and validation envelope", async () => {
+      const response = await request(app).get("/api/v1/agents?limit=101");
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Request validation failed");
+    });
+
+    it("rejects negative limit with 400 and validation envelope", async () => {
+      const response = await request(app).get("/api/v1/agents?limit=-1");
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Request validation failed");
+    });
+
+    it("rejects negative offset with 400 and validation envelope", async () => {
+      const response = await request(app).get("/api/v1/agents?offset=-1");
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toBe("Request validation failed");
     });
   });
 });
