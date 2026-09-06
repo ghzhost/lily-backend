@@ -1,4 +1,4 @@
-import crypto from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 
 import { securityConfig } from "../../config/env";
@@ -6,17 +6,6 @@ import { logger } from "../../config/logger";
 import { AppError } from "./app-error";
 
 let warnedAboutMissingKey = false;
-
-function safeCompareKey(providedKey: string, configuredKey: string): boolean {
-  const providedBuffer = Buffer.from(providedKey, "utf8");
-  const configuredBuffer = Buffer.from(configuredKey, "utf8");
-
-  if (providedBuffer.length !== configuredBuffer.length) {
-    return false;
-  }
-
-  return crypto.timingSafeEqual(providedBuffer, configuredBuffer);
-}
 
 export function apiKeyAuth(request: Request, _response: Response, next: NextFunction): void {
   if (!securityConfig.authApiKey) {
@@ -34,7 +23,13 @@ export function apiKeyAuth(request: Request, _response: Response, next: NextFunc
     return next(new AppError(401, "API key is required"));
   }
 
-  if (!safeCompareKey(providedKey, securityConfig.authApiKey)) {
+  const providedBuffer = Buffer.from(providedKey);
+  const expectedBuffer = Buffer.from(securityConfig.authApiKey);
+
+  if (
+    providedBuffer.length !== expectedBuffer.length ||
+    !timingSafeEqual(providedBuffer, expectedBuffer)
+  ) {
     return next(new AppError(403, "Invalid API key"));
   }
 
