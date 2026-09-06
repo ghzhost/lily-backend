@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { createApp } from "@/app";
 import { agentsService } from "@/modules/agents/agents.service";
+import { capabilityEnum } from "@/modules/agents/agents.schema";
 
 const app: Express = createApp();
 
@@ -14,6 +15,33 @@ describe("agent endpoints", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.total).toBe(1);
+  });
+
+  it("returns only allowlisted capabilities for seeded and created agents", async () => {
+    agentsService.reset();
+    const allowlist = capabilityEnum.options;
+
+    // Create an agent with valid capabilities
+    await request(app)
+      .post("/api/v1/agents")
+      .send({
+        name: "Payments Agent",
+        description:
+          "AgentLily responsible for processing USDC payments and settlements.",
+        capabilities: ["usdc-payments", "settlement"],
+      });
+
+    const response = await request(app).get("/api/v1/agents");
+    expect(response.status).toBe(200);
+
+    for (const agent of response.body.data.agents) {
+      for (const cap of agent.capabilities as string[]) {
+        expect(allowlist).toContain(cap);
+      }
+    }
+
+    // Reset to restore clean state for subsequent tests
+    agentsService.reset();
   });
 
   it("returns seeded agents so contributors can inspect a real module", async () => {

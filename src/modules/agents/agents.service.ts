@@ -1,4 +1,6 @@
+import crypto from "node:crypto";
 import { AppError } from "../../common/http/app-error";
+import type { Capability } from "./agents.schema";
 import type { Agent, AgentStatus, CreateAgentInput } from "./agents.types";
 
 const MAX_IN_MEMORY_AGENTS = 5_000;
@@ -11,7 +13,11 @@ const initialAgents: Agent[] = [
       "AgentLily instance responsible for orchestrating treasury rebalancing operations.",
     walletAddress: "GBVDO6P6E3S6XG2Z5V5L7N3Z6Y2K4J5H7F8D9S0A1B2C3D4E5F6G7H8I",
     status: "active",
-    capabilities: ["settlement", "rebalance", "liquidity-monitoring"],
+    capabilities: [
+      "settlement",
+      "rebalance",
+      "liquidity-monitoring",
+    ] satisfies Capability[],
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
   },
@@ -33,7 +39,19 @@ export const agentsService = {
   createAgent: (input: CreateAgentInput): Agent => {
     const now = new Date().toISOString();
     const slug = input.name.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-    const walletAddress = `G${slug.padEnd(55, "0").slice(0, 55)}`;
+    const effectiveSeed =
+      slug.length > 0
+        ? slug
+        : crypto
+            .createHash("sha256")
+            .update(input.name)
+            .digest("hex")
+            .toUpperCase();
+    const walletAddress = `G${effectiveSeed.padEnd(55, "0").slice(0, 55)}`;
+
+    if (agents.some((candidate) => candidate.walletAddress === walletAddress)) {
+      throw new AppError(409, "Agent with this wallet address already exists");
+    }
 
     const agent: Agent = {
       id: `agentlily_${agentSequence++}`,
@@ -58,7 +76,7 @@ export const agentsService = {
     const agent = agents.find((candidate) => candidate.id === id);
 
     if (!agent) {
-      throw new AppError(404, "Agent not found");
+      throw new AppError(404, "Agent not found", undefined, "NOT_FOUND");
     }
 
     agent.status = status;

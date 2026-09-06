@@ -10,10 +10,18 @@ Thanks for considering a contribution to Lily Protocol.
 
 ## Quality checks
 
-Before opening a pull request, run:
+Before opening a pull request, run the full verification gate:
+
+```bash
+npm run check
+```
+
+Or run the individual stages:
 
 ```bash
 npm run lint
+npm run typecheck
+npm run audit:prod
 npm run build
 npm run test
 ```
