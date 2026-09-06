@@ -5,7 +5,9 @@ import { healthService } from "@/modules/health/health.service";
 
 export const getHealthStatus = (
   _request: Request,
-  response: Response<ApiSuccessResponse<ReturnType<typeof healthService.getStatus>>>,
+  response: Response<
+    ApiSuccessResponse<ReturnType<typeof healthService.getStatus>>
+  >,
 ): void => {
   response.status(200).json({
     success: true,
@@ -15,22 +17,24 @@ export const getHealthStatus = (
 
 export const getLivenessStatus = (
   _request: Request,
-  response: Response<ApiSuccessResponse<{ status: string }>>,
+  response: Response<
+    ApiSuccessResponse<ReturnType<typeof healthService.getLiveness>>
+  >,
 ): void => {
   response.status(200).json({
     success: true,
-    data: { status: "ok" },
+    data: healthService.getLiveness(),
   });
 };
 
 export const getReadinessStatus = (
   _request: Request,
-  response: Response<ApiSuccessResponse<ReturnType<typeof healthService.getStatus>>>,
+  response: Response<
+    ApiSuccessResponse<ReturnType<typeof healthService.getReadiness>>
+  >,
 ): void => {
-  // Currently all dependencies are in-memory; always ready.
-  // Future: check DB, cache, external deps here.
   response.status(200).json({
     success: true,
-    data: healthService.getStatus(),
+    data: healthService.getReadiness(),
   });
 };
