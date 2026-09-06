@@ -6,19 +6,23 @@ interface IdempotencyEntry {
   createdAt: number;
 }
 
+export const DEFAULT_IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+export const DEFAULT_IDEMPOTENCY_MAX_ENTRIES = 1000;
+export const DEFAULT_SWEEP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+
 const store = new Map<string, IdempotencyEntry>();
-const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-const DEFAULT_MAX_CAPACITY = 1000;
-const DEFAULT_SWEEP_INTERVAL_MS = 60 * 1000; // 1 minute
+let ttlMs = DEFAULT_IDEMPOTENCY_TTL_MS;
+let maxEntries = DEFAULT_IDEMPOTENCY_MAX_ENTRIES;
 
-let configuredTtlMs = DEFAULT_TTL_MS;
-let configuredMaxCapacity = DEFAULT_MAX_CAPACITY;
-let sweepTimer: NodeJS.Timeout | null = null;
-
-export const sweepExpiredEntries = (now = Date.now()): number => {
+/**
+ * Sweeps entries that have exceeded ttlMs.
+ * Returns the count of evicted expired entries.
+ */
+export const sweepExpiredEntries = (): number => {
+  const now = Date.now();
   let evicted = 0;
   for (const [key, entry] of store.entries()) {
-    if (now - entry.createdAt >= configuredTtlMs) {
+    if (now - entry.createdAt >= ttlMs) {
       store.delete(key);
       evicted++;
     }
@@ -26,50 +30,17 @@ export const sweepExpiredEntries = (now = Date.now()): number => {
   return evicted;
 };
 
-const ensureSweepTimer = (): void => {
-  if (sweepTimer) {
-    return;
-  }
-  sweepTimer = setInterval(() => {
-    sweepExpiredEntries();
-  }, DEFAULT_SWEEP_INTERVAL_MS);
-  if (typeof sweepTimer.unref === "function") {
-    sweepTimer.unref();
-  }
-};
-
-const evictOldestIfNeeded = (): void => {
-  while (store.size > configuredMaxCapacity) {
-    const oldestKey = store.keys().next().value;
-    if (oldestKey === undefined) {
-      break;
-    }
-    store.delete(oldestKey);
-  }
-};
-
-export const configureIdempotencyStore = (options?: {
-  ttlMs?: number;
-  maxCapacity?: number;
-}): void => {
-  if (options?.ttlMs !== undefined) {
-    configuredTtlMs = options.ttlMs;
-  }
-  if (options?.maxCapacity !== undefined) {
-    configuredMaxCapacity = options.maxCapacity;
-  }
-  evictOldestIfNeeded();
-};
-
-export const getIdempotencyStoreSize = (): number => store.size;
+// Periodic background sweep timer with .unref() so it never blocks process exit
+const sweepTimer = setInterval(() => {
+  sweepExpiredEntries();
+}, DEFAULT_SWEEP_INTERVAL_MS);
+sweepTimer.unref();
 
 export const idempotencyKeyMiddleware = (
   req: Request,
   res: Response,
   next: NextFunction,
 ): void => {
-  ensureSweepTimer();
-
   if (req.method !== "POST") {
     next();
     return;
@@ -85,27 +56,30 @@ export const idempotencyKeyMiddleware = (
   const existing = store.get(key);
 
   if (existing) {
-    if (now - existing.createdAt < configuredTtlMs) {
+    if (now - existing.createdAt < ttlMs) {
       res.status(existing.statusCode).json(existing.response);
       return;
     }
+    // Expired entry found on lookup; clean up proactively
     store.delete(key);
   }
 
   const originalJson = res.json.bind(res);
   res.json = ((body: unknown) => {
-    // Only cache successful 2xx responses (or standard successful operations)
+    // Issue #284: Only cache successful reproducible 2xx responses
     if (res.statusCode >= 200 && res.statusCode < 300) {
-      // Refresh order for LRU behavior if key existed
-      if (store.has(key)) {
-        store.delete(key);
+      // Issue #288: Bound store capacity using oldest-first (FIFO/LRU) eviction
+      if (store.size >= maxEntries && !store.has(key)) {
+        const oldestKey = store.keys().next().value;
+        if (oldestKey !== undefined) {
+          store.delete(oldestKey);
+        }
       }
       store.set(key, {
         response: body,
         statusCode: res.statusCode,
         createdAt: Date.now(),
       });
-      evictOldestIfNeeded();
     }
     return originalJson(body);
   }) as typeof res.json;
@@ -113,11 +87,32 @@ export const idempotencyKeyMiddleware = (
   next();
 };
 
-// Exposed for testing
+// Test seams
+export const _getIdempotencyStoreSize = (): number => store.size;
+
+export const _setIdempotencyConfig = (config: {
+  maxEntries?: number;
+  ttlMs?: number;
+}): void => {
+  if (config.maxEntries !== undefined) {
+    maxEntries = config.maxEntries;
+  }
+  if (config.ttlMs !== undefined) {
+    ttlMs = config.ttlMs;
+  }
+};
+
+export const _resetIdempotencyConfig = (): void => {
+  maxEntries = DEFAULT_IDEMPOTENCY_MAX_ENTRIES;
+  ttlMs = DEFAULT_IDEMPOTENCY_TTL_MS;
+};
+
+export const _sweepIdempotencyStore = sweepExpiredEntries;
+
 export const _resetIdempotencyStore = (): void => {
   store.clear();
-  configuredTtlMs = DEFAULT_TTL_MS;
-  configuredMaxCapacity = DEFAULT_MAX_CAPACITY;
+  _resetIdempotencyConfig();
 };
 
 export const clearIdempotencyStore = _resetIdempotencyStore;
+

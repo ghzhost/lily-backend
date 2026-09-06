@@ -34,6 +34,8 @@ describe("CORS options handler", () => {
 
     expect(error).not.toBeNull();
     expect(error instanceof Error).toBe(true);
-    expect((error as Error).message).toBe("Origin not allowed by CORS");
+    expect((error as Error).message).toBe(
+      "Origin is not allowed by CORS policy",
+    );
   });
 });

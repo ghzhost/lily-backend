@@ -48,3 +48,8 @@ export interface ExecutePaymentInput {
 export interface ExecutePaymentResponse {
   payment: PaymentRecord;
 }
+
+export interface ListPaymentsResponse {
+  total: number;
+  payments: PaymentRecord[];
+}
